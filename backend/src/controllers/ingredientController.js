@@ -1,11 +1,18 @@
+// backend/src/controllers/ingredientController.js
 const supabase = require('../services/supabase');
 
+// FUNÇÃO PARA CRIAR UM NOVO INSUMO
 exports.createIngredient = async (req, res) => {
     const { name, barcode, stock_quantity, unit_of_measure } = req.body;
     try {
+        // Validação simples
+        if (!name || !stock_quantity || !unit_of_measure) {
+            return res.status(400).json({ error: 'Nome, quantidade e unidade são obrigatórios.' });
+        }
+
         const { data, error } = await supabase
             .from('ingredients')
-            .insert([{ name, barcode, stock_quantity, unit_of_measure }])
+            .insert([{ name, barcode: barcode || null, stock_quantity, unit_of_measure }])
             .select();
         if (error) throw error;
         res.status(201).json(data[0]);
@@ -14,16 +21,17 @@ exports.createIngredient = async (req, res) => {
     }
 };
 
+// FUNÇÃO PARA LISTAR TODOS OS INSUMOS
 exports.getAllIngredients = async (req, res) => {
     try {
-        const { data, error } = await supabase.from('ingredients').select('*');
+        const { data, error } = await supabase.from('ingredients').select('*').order('name', { ascending: true });
         if (error) throw error;
         res.status(200).json(data);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
-
+// FUNÇÃO PARA BUSCAR INSUMO POR CÓDIGO DE BARRAS
 exports.findIngredientByBarcode = async (req, res) => {
     const { barcode } = req.params;
     try {

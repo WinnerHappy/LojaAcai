@@ -1,52 +1,67 @@
 'use client';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useEffect } from 'react';
 
-const BarcodeScanner = ({ onScanResult }) => {
-
+const BarcodeScanner = ({ onScanResult, onScanError }) => {
   useEffect(() => {
-    // Cria uma nova instância do scanner
-    const scanner = new Html5QrcodeScanner(
-      'reader', // O ID do elemento div onde o scanner será renderizado
-      {
-        qrbox: {
-          width: 250,
-          height: 250,
-        },
-        fps: 5, // Quadros por segundo para escanear
-        rememberLastUsedCamera: true, // Lembra a última câmera usada
-      },
-      false // verbose, pode ser true para mais logs
-    );
+    let html5QrCode;
 
-    // Função que será chamada quando um QR code for lido com sucesso
-    const handleSuccess = (decodedText, decodedResult) => {
-      scanner.clear(); // Para o scanner após uma leitura bem-sucedida
-      onScanResult(decodedText);
+    const startScanner = async () => {
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length) {
+          html5QrCode = new Html5Qrcode('reader', {
+            // Habilita os formatos que queremos suportar
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE,
+              Html5QrcodeSupportedFormats.EAN_13, // Códigos de barras de produtos (livros, etc.)
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+            ],
+          });
+
+          // Inicia a câmera
+          html5QrCode.start(
+            { facingMode: 'environment' }, // Tenta usar a câmera traseira em celulares
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 150 }, // Caixa retangular, melhor para códigos de barras
+            },
+            (decodedText, decodedResult) => {
+              // Sucesso na leitura
+              onScanResult(decodedText);
+            },
+            (errorMessage) => {
+              // Erro na leitura (ignorado na maioria das vezes)
+              if (onScanError) {
+                onScanError(errorMessage);
+              }
+            }
+          ).catch((err) => {
+            console.error("Não foi possível iniciar o scanner", err);
+            if (onScanError) onScanError("Não foi possível iniciar a câmera.");
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao obter câmeras", err);
+        if (onScanError) onScanError("Nenhuma câmera encontrada.");
+      }
     };
 
-    // Função para lidar com erros (opcional)
-    const handleError = (error) => {
-      // Você pode ignorar a maioria dos erros, pois eles acontecem constantemente até um código ser encontrado
-      // console.warn(error);
-    };
+    startScanner();
 
-    // Inicia a renderização do scanner
-    scanner.render(handleSuccess, handleError);
-
-    // Função de limpeza: será chamada quando o componente for desmontado
-    // É MUITO IMPORTANTE para parar a câmera e evitar vazamentos de memória
+    // Função de limpeza para parar a câmera quando o componente é desmontado
     return () => {
-      scanner.clear().catch(error => {
-        console.error("Falha ao limpar o Html5QrcodeScanner.", error);
-      });
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(err => {
+          console.error("Falha ao parar o scanner.", err);
+        });
+      }
     };
-  }, [onScanResult]); // O array de dependências vazio garante que o useEffect rode apenas uma vez
+  }, [onScanResult, onScanError]);
 
-  // O div que a biblioteca usará para montar o leitor de QR code
-  return (
-    <div id="reader" style={{ width: '100%', maxWidth: '500px', margin: '0 auto' }}></div>
-  );
+  return <div id="reader" style={{ width: '100%', maxWidth: '500px', margin: '1rem auto' }}></div>;
 };
 
 export default BarcodeScanner;

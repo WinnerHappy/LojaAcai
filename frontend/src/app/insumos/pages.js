@@ -4,77 +4,164 @@ import BarcodeScanner from '@/components/BarcodeScanner';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export default function IngredientsPage() {
-    const [scannedCode, setScannedCode] = useState('');
-    const [foundIngredient, setFoundIngredient] = useState(null);
+export default function InsumosPage() {
+    const [ingredients, setIngredients] = useState([]);
+    const [showScanner, setShowScanner] = useState(false);
+    const [formData, setFormData] = useState({
+        name: '',
+        barcode: '',
+        stock_quantity: 0,
+        unit_of_measure: 'g', // Padrão 'gramas'
+    });
     const [message, setMessage] = useState('');
-    const [quantityToAdd, setQuantityToAdd] = useState(1);
 
-    const handleScan = async (barcode) => {
-        if (barcode === scannedCode) return; // Evita buscas repetidas
-        setScannedCode(barcode);
-        setMessage('Buscando...');
-        setFoundIngredient(null);
+    // Função para buscar a lista de insumos
+    const fetchIngredients = async () => {
         try {
-            const res = await fetch(`${API_URL}/ingredients/barcode/${barcode}`);
-            if (res.status === 404) {
-                setMessage(`Insumo com código ${barcode} não encontrado. Cadastre-o abaixo.`);
-            } else if (res.ok) {
-                const data = await res.json();
-                setFoundIngredient(data);
-                setMessage('Insumo encontrado! Adicione a quantidade de entrada.');
-            } else {
-                throw new Error('Falha na busca');
-            }
+            const res = await fetch(`${API_URL}/ingredients`);
+            if (!res.ok) throw new Error('Falha ao buscar insumos');
+            const data = await res.json();
+            setIngredients(data);
         } catch (error) {
-            setMessage('Erro ao buscar o insumo.');
+            setMessage(`Erro: ${error.message}`);
         }
     };
 
-    const handleUpdateStock = async () => {
-        if (!foundIngredient) return;
+    // Busca os insumos quando a página carrega
+    useEffect(() => {
+        fetchIngredients();
+    }, []);
+
+    // Atualiza o formulário quando um campo é alterado
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+    };
+
+    // Submete o formulário para criar um novo insumo
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMessage('Cadastrando...');
         try {
-            const res = await fetch(`${API_URL}/ingredients/${foundIngredient.id}/stock`, {
-                method: 'PATCH',
+            const res = await fetch(`${API_URL}/ingredients`, {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ quantity_to_add: parseFloat(quantityToAdd) })
+                body: JSON.stringify(formData),
             });
-            if (res.ok) {
-                setMessage(`Estoque de ${foundIngredient.name} atualizado com sucesso!`);
-                setFoundIngredient(null);
-                setScannedCode('');
-            } else {
-                throw new Error('Falha ao atualizar estoque');
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Falha ao cadastrar insumo');
             }
+            setMessage('Insumo cadastrado com sucesso!');
+            setFormData({ name: '', barcode: '', stock_quantity: 0, unit_of_measure: 'g' }); // Limpa o formulário
+            fetchIngredients(); // Atualiza a lista
         } catch (error) {
-            setMessage('Erro ao atualizar estoque.');
+            setMessage(`Erro: ${error.message}`);
         }
+    };
+
+    // O que fazer quando o scanner lê um código
+    const handleScanResult = (barcode) => {
+        setFormData({ ...formData, barcode: barcode }); // Preenche o campo de código de barras
+        setShowScanner(false); // Esconde o scanner
+        setMessage(`Código ${barcode} capturado! Complete o resto do formulário.`);
     };
 
     return (
         <div>
             <h1>Gerenciamento de Insumos</h1>
             <div className="container">
-                <h2>Entrada de Estoque via Código de Barras</h2>
-                <BarcodeScanner onScanResult={handleScan} />
+                <h2>Cadastrar Novo Insumo</h2>
                 {message && <p><strong>{message}</strong></p>}
-                {scannedCode && <p>Código Lido: {scannedCode}</p>}
-
-                {foundIngredient && (
-                    <div>
-                        <h3>{foundIngredient.name}</h3>
-                        <p>Estoque atual: {foundIngredient.stock_quantity} {foundIngredient.unit_of_measure}</p>
-                        <input
-                            type="number"
-                            value={quantityToAdd}
-                            onChange={(e) => setQuantityToAdd(e.target.value)}
-                            placeholder="Quantidade de entrada"
-                        />
-                        <button onClick={handleUpdateStock}>Confirmar Entrada</button>
+                
+                {/* Botão para mostrar/esconder o scanner */}
+                <button onClick={() => setShowScanner(!showScanner)}>
+                    {showScanner ? 'Fechar Scanner' : 'Escanear Código de Barras'}
+                </button>
+                
+                {showScanner && (
+                    <div style={{marginTop: '1rem'}}>
+                        <p>Aponte a câmera para o código de barras ou QR code.</p>
+                        <BarcodeScanner onScanResult={handleScanResult} />
                     </div>
                 )}
+
+                {/* Formulário de cadastro manual */}
+                <form onSubmit={handleSubmit} style={{marginTop: '1.5rem'}}>
+                    <div className="form-group">
+                        <label htmlFor="barcode">Código de Barras (opcional)</label>
+                        <input
+                            type="text"
+                            id="barcode"
+                            name="barcode"
+                            value={formData.barcode}
+                            onChange={handleInputChange}
+                            placeholder="Preenchido pelo scanner ou digitado"
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="name">Nome do Insumo *</label>
+                        <input
+                            type="text"
+                            id="name"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleInputChange}
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="stock_quantity">Quantidade Inicial em Estoque *</label>
+                        <input
+                            type="number"
+                            id="stock_quantity"
+                            name="stock_quantity"
+                            value={formData.stock_quantity}
+                            onChange={handleInputChange}
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="unit_of_measure">Unidade de Medida *</label>
+                        <select
+                            id="unit_of_measure"
+                            name="unit_of_measure"
+                            value={formData.unit_of_measure}
+                            onChange={handleInputChange}
+                            required
+                        >
+                            <option value="g">Gramas (g)</option>
+                            <option value="kg">Quilogramas (kg)</option>
+                            <option value="ml">Mililitros (ml)</option>
+                            <option value="l">Litros (l)</option>
+                            <option value="un">Unidade (un)</option>
+                        </select>
+                    </div>
+                    <button type="submit">Adicionar Insumo</button>
+                </form>
             </div>
-            {/* Aqui entrará o formulário para cadastrar novos insumos e a lista de todos os insumos */}
+
+            <div className="container">
+                <h2>Insumos em Estoque</h2>
+                <table style={{width: '100%', textAlign: 'left'}}>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Estoque</th>
+                            <th>Código de Barras</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {ingredients.map(ing => (
+                            <tr key={ing.id}>
+                                <td>{ing.name}</td>
+                                <td>{ing.stock_quantity} {ing.unit_of_measure}</td>
+                                <td>{ing.barcode || 'N/A'}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
