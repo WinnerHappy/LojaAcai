@@ -31,8 +31,8 @@ const Navbar = () => {
             zIndex: 10,
         }}>
             <Link href="/" style={linkStyle('/')}>Dashboard</Link>
-            <Link href="/ingredients" style={linkStyle('/ingredients')}>Insumos</Link>
-            <Link href="/products" style={linkStyle('/products')}>Produtos</Link>
+            <Link href="/ingredients" style={linkStyle('/ingredients')}>ingredients</Link>
+            <Link href="/products" style={linkStyle('/products')}>products</Link>
             <Link href="/sales" style={linkStyle('/sales')}>Registrar Venda</Link>
         </nav>
     );
